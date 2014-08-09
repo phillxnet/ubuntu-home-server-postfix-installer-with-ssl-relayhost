@@ -1,0 +1,210 @@
+#!/bin/bash
+# remember bash -x ./scriptname and bash ./-xv to debug bash scripts
+# inspired by https://gist.github.com/sshtmc/3952294
+
+# Machine is assumed to be on a local private lan and have only a dhcp established domain.
+# ie hostname returns only the machine name and no domain (no dots) in "hostname -fqdn"
+HOST=$(hostname)
+# smtp usually uses port 465
+SMTP_PORT=465
+
+# the following domainname will often be (none) on local lan machines
+DOMAINNAME=$(domainname)
+
+if [ "$DOMAINNAME" = "(none)" ]; then
+  echo "'domainname' returns (none) this is not uncommon for home servers"
+  read -e -p "Pleae input your local networks domain (eg localdomain or lan): " -i "lan" LANDOMAIN
+else
+  echo "domain name = $DOMAINNAME"
+  echo "this script is intended for use only on private lan Satellite mail systems"
+  echo "continuing anyway but please be warned that this context has not been tested"
+  LANDOMAIN=$DOMAINNAME
+fi
+
+# preconfigure the postfix install questions via debconf-set-selections
+# debconf-set-selections takes four values per line, one line per question
+# package name, question name, type of value requested(eg boolean), answer
+function install_postfix() {
+echo | sudo debconf-set-selections <<__EOF
+postfix postfix/root_address    string
+postfix postfix/mydomain_warning        boolean
+postfix postfix/bad_recipient_delimiter note
+postfix postfix/recipient_delim string  +
+postfix postfix/kernel_version_warning  boolean
+postfix postfix/sqlite_warning  boolean
+postfix postfix/main_mailer_type        select  Satellite system
+postfix postfix/not_configured  note
+postfix postfix/mailname        string  $HOST
+postfix postfix/protocols       select  all
+postfix postfix/procmail        boolean false
+postfix postfix/retry_upgrade_warning   boolean
+postfix postfix/rfc1035_violation       boolean false
+postfix postfix/destinations    string  $HOST, localhost.localdomain, localhost
+postfix postfix/chattr  boolean false
+postfix postfix/mailbox_limit   string  0
+postfix postfix/mynetworks      string  127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+postfix postfix/relay_restrictions_warning      boolean
+postfix postfix/tlsmgr_upgrade_warning  boolean
+postfix postfix/relayhost       string  [127.0.0.1]:11125
+__EOF
+  
+  echo "Postfix should be pre-configured as Satellite system"
+  echo "Auto installing as such"
+  sudo apt-get install -q -y postfix
+  # -q for quiet -y for yes
+  }
+  
+  if ! dpkg -s postfix >/dev/null; then
+  install_postfix
+  # get the SMTP server name and user auth credentials
+  # currently assuming username = email address should ask if same and deal with
+  echo "assuming smtp port is 465; edit script if different"
+  read -e -p "SMTP server name (N.B. example given is for TSOHOST customers only): " -i "mail3.gridhost.co.uk" SMTP_SERVER
+  read -p "SMTP server username (assumed also to be the email address): " SMTP_USER
+  read -p "SMTP server password: " SMTP_PASS
+  # most basic of sanity checks (are any of the above empty if so exit script
+  if [ -z "$SMTP_SERVER" ]; then echo "No server name given. Exiting."; exit -1; fi
+  if [ -z "$SMTP_USER" ]; then echo "No username given. Exiting."; exit -1; fi
+  if [ -z "$SMTP_PASS" ]; then echo "No password given. Exiting."; exit -1; fi
+  
+  # place to tack on some additional configurations to main.cf
+  sudo tee -a /etc/postfix/main.cf >/dev/null <<__EOF
+    
+smtp_use_tls = yes
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+# Amazon Simple Email Service may require the following line
+# re: http://www.stefanolocati.it/blog/?p=737
+#smtp_sasl_security_options =
+smtp_sasl_security_options = noanonymous
+smtp_tls_loglevel = 1
+#smtp_tls_per_site is now strongly discouraged see:-
+#http://www.postfix.org/postconf.5.html#smtp_tls_per_site
+#now considered better to use smtp_tls_policy_maps
+smtp_tls_policy_maps = hash:/etc/postfix/tls_policy
+smtp_tls_CAfile = /etc/ssl/certs/Equifax_Secure_CA.pem
+
+# http://www.postfix.org/ADDRESS_REWRITING_README.html
+# Rewrite recipients envelope addresses, leaves header "To" alone.
+# eg send admin@example.com to admin@yourreal.domain
+virtual_alias_maps = hash:/etc/postfix/virtual
+
+# rewrite of outgoing SMTP mail, ie user@localhost to info@yourreal.domain
+# many mail servers reject mail addresses with invalid domain names
+# usefull for local lan server with no real domain to rewrite email appropriately
+# for the smarthost you use.
+# Note this does not affect mail to local user.
+smtp_generic_maps = hash:/etc/postfix/generic
+__EOF
+
+  # N.B. all tees without -a cause an overwrite of the output file
+  
+  # write sasl_passwd
+  echo "[127.0.0.1]:11125 $SMTP_USER:$SMTP_PASS" | sudo tee /etc/postfix/sasl_passwd >/dev/null
+  sudo chmod 400 /etc/postfix/sasl_passwd
+  sudo postmap /etc/postfix/sasl_passwd
+  
+  # write tls_policy
+  echo "[127.0.0.1]:11125 may" | sudo tee /etc/postfix/tls_policy >/dev/null
+  sudo chmod 400 /etc/postfix/tls_policy
+  sudo postmap /etc/postfix/tls_policy
+  
+  # write virtual
+  # re-write envelope address (forward) mail addressed to admin@example.com to the user email address,
+  # note that the message will still appear as to admin@example.com in the message header.
+  # The envelope "for" field will be changed to the gmail address so "for" as in "for the attention of"
+  # use canonical mapping to rewrite header and envelope addresses
+  echo "admin@example.com $SMTP_USER" | sudo tee /etc/postfix/virtual >/dev/null
+  sudo chmod 400 /etc/postfix/virtual
+  sudo postmap /etc/postfix/virtual
+  
+  # write generic
+  # Rewrite of outgoing SMTP mail, ie user@localhost to info@yourreal.domain
+  # many mail servers reject mail addresses with invalid domain names
+  # usefull for local lan server with no real domain to rewrite email appropriately
+  # for the smarthost you use.
+  # Note this does not affect mail to local user.
+  echo "@$HOST $SMTP_USER" | sudo tee /etc/postfix/generic >/dev/null
+  echo "@$HOST.$LANDOMAIN $SMTP_USER" | sudo tee -a /etc/postfix/generic >/dev/null
+  sudo chmod 400 /etc/postfix/generic
+  sudo postmap /etc/postfix/generic
+  
+  sudo service postfix restart
+  echo "Configuration done"
+  
+  # we need to install stunnel if not already installed  
+  function install_and_configure_stunnel4() {
+    if which stunnel4 >/dev/null; then
+      #already installed
+      echo "stunnel4 already installed; writing config to /etc/stunnel/stunnel.conf"
+    else
+      echo "Installing stunnel4"
+      sudo apt-get install -q stunnel4
+    fi
+    # configure stunnel4
+    sudo tee -a /etc/postfix/main.cf >/dev/null <<__EOF
+; Debugging stuff (may be useful for troubleshooting)
+; syslog level names or numbers emerg (0), alert (1), crit (2)     
+; err (3), warning (4), notice (5), info (6), or debug (7)
+debug = 3
+; output = /var/log/stunnel4/stunnel.log
+
+[smtp-tls-wrapper]
+accept = 127.0.0.1:11125
+client = yes
+connect = $SMTP_SERVER:$SMTP_PORT
+__EOF
+    }
+  
+  read -e -p "Would you like to install and configure stunnel4; required for postfix to SSL only SMTP relayhost (y/n): " -i "y" STUNNEL4_INSTALL
+  if [ "$STUNNEL4_INSTALL" = "y" ]; then
+    install_and_configure_stunnel4
+  else
+    echo "N.B. this script assumes stunnel4 is installed and configured correctly"
+  fi
+  
+  ## send test email or not
+  read -e -p "Would you like to send a test email using the new configuration? (y/n): " -i "y" TESTEMAIL
+ 
+  function send_test_email() {
+  if which mail >/dev/null; then
+    echo "Sending test email, it should only take a few minutes to arrive"
+    mail -s "Email relaying configured at ${HOST}" $SMTP_USER <<__EOF
+    The postfix service has been configured on host '${HOST}'.
+    Thank you for using this postfix configuration script.
+__EOF
+    echo "A test email has been sent to ${SMTP_USER} from this host '${HOST}'" 
+  else
+    echo "There was a problem finding the 'mail' command"
+    echo "Test email not sent"
+  fi
+  }
+
+  if [ "$TESTEMAIL" = "y" ]; then
+    if which mail >/dev/null; then
+      echo "mail command found"
+      send_test_email
+    else
+      echo "mail command not found; required to send test email"
+      read -e -p "Would you like to install mailutils which contains the mail command? (y/n): " -i "y" REPLY
+      if [ "$REPLY" = "y" ]; then
+        echo "Installing mailutils"
+        sudo apt-get install -q mailutils
+        send_test_email
+      else
+        echo "OK proceeding without installing mailutils"
+        echo "Test email not sent"
+      fi
+    fi
+  else
+    echo "OK no test email sent"
+  fi
+    
+else
+  echo "Postfix is already installed."
+  echo "This script only installs and configures postscript from scratch"
+  echo "To remove the current postfix and loose all it's configurations:-"
+  echo "run sudo apt-get purge postfix"
+  echo "N.B. Warning the above command will remove all previous configurations of postfix bar /etc/mailname"
+  echo
+fi
