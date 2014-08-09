@@ -113,7 +113,7 @@ __EOF
   sudo postmap /etc/postfix/tls_policy
   
   # write virtual
-  # re-write envelope address (forward) mail addressed to admin@example.com to the user email address,
+  # re-write envelope address eg mail addressed to admin@example.com will be addressed to SMTP_USER instead,
   # note that the message will still appear as to admin@example.com in the message header.
   # The envelope "for" field will be changed to the gmail address so "for" as in "for the attention of"
   # use canonical mapping to rewrite header and envelope addresses
