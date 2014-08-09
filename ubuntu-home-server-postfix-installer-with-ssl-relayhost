@@ -145,9 +145,9 @@ __EOF
       echo "Installing stunnel4"
       sudo apt-get install -q stunnel4
     fi
-    # configure stunnel4
-    echo "Writing config to /etc/stunnel/smtps-tls-wrapper.conf"
-    sudo tee /etc/stunnel/smtps-tls-wrapper.conf >/dev/null <<__EOF
+      # configure stunnel4
+      echo "Writing config to /etc/stunnel/smtps-tls-wrapper.conf"
+      sudo tee /etc/stunnel/smtps-tls-wrapper.conf >/dev/null <<__EOF
 ; Debugging stuff (may be useful for troubleshooting)
 ; syslog level names or numbers emerg (0), alert (1), crit (2)     
 ; err (3), warning (4), notice (5), info (6), or debug (7)
@@ -160,11 +160,11 @@ client = yes
 connect = $SMTP_SERVER:$SMTP_PORT
 
 __EOF
-    # enable stunnel4 on boot via olde /etc/default/stunnel4
-    echo "Enabling stunnel4 on boot"
-    sudo sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
-    echo "Starting stunnel4 service to enable email testing"
-    sudo /etc/init.d/stunnel4 start
+      # enable stunnel4 on boot via olde /etc/default/stunnel4
+      echo "Enabling stunnel4 on boot"
+      sudo sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
+      echo "Starting stunnel4 service to enable email testing"
+      sudo /etc/init.d/stunnel4 start
   }
   
   # ask if to install_and_configure_stunnel4
