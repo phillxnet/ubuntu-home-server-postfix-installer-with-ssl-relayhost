@@ -136,20 +136,21 @@ __EOF
   function install_and_configure_stunnel4() {
     if which stunnel4 >/dev/null; then
       #already installed
-      echo "stunnel4 already installed; writing config to /etc/stunnel/stunnel.conf"
+      echo "stunnel4 already installed"
     else
       echo "Installing stunnel4"
       sudo apt-get install -q stunnel4
     fi
     # configure stunnel4
-    sudo tee -a /etc/postfix/main.cf >/dev/null <<__EOF
+    echo "Writing config to /etc/stunnel/smtps-tls-wrapper.conf"
+    sudo tee /etc/stunnel/smtps-tls-wrapper.conf >/dev/null <<__EOF
 ; Debugging stuff (may be useful for troubleshooting)
 ; syslog level names or numbers emerg (0), alert (1), crit (2)     
 ; err (3), warning (4), notice (5), info (6), or debug (7)
 debug = 3
 ; output = /var/log/stunnel4/stunnel.log
 
-[smtp-tls-wrapper]
+[smtps-tls-wrapper]
 accept = 127.0.0.1:11125
 client = yes
 connect = $SMTP_SERVER:$SMTP_PORT
@@ -161,6 +162,7 @@ __EOF
     sudo /etc/init.d/stunnel4 start
   }
   
+  # ask if to install_and_configure_stunnel4
   read -e -p "Would you like to install and configure stunnel4; required for postfix to SSL only SMTP relayhost (y/n): " -i "y" STUNNEL4_INSTALL
   if [ "$STUNNEL4_INSTALL" = "y" ]; then
     install_and_configure_stunnel4
