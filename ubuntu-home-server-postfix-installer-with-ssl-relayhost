@@ -73,10 +73,12 @@ __EOF
 smtp_use_tls = yes
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+
 # Amazon Simple Email Service may require the following line
 # re: http://www.stefanolocati.it/blog/?p=737
 #smtp_sasl_security_options =
 smtp_sasl_security_options = noanonymous
+
 smtp_tls_loglevel = 1
 #smtp_tls_per_site is now strongly discouraged see:-
 #http://www.postfix.org/postconf.5.html#smtp_tls_per_site
@@ -95,6 +97,7 @@ virtual_alias_maps = hash:/etc/postfix/virtual
 # for the smarthost you use.
 # Note this does not affect mail to local user.
 smtp_generic_maps = hash:/etc/postfix/generic
+
 __EOF
 
   # N.B. all tees without -a cause an overwrite of the output file
@@ -154,6 +157,7 @@ debug = 3
 accept = 127.0.0.1:11125
 client = yes
 connect = $SMTP_SERVER:$SMTP_PORT
+
 __EOF
     # enable stunnel4 on boot via olde /etc/default/stunnel4
     echo "Enabling stunnel4 on boot"
