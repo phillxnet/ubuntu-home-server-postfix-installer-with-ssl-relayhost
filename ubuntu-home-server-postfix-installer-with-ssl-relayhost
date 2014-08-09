@@ -133,8 +133,13 @@ __EOF
   sudo chmod 400 /etc/postfix/generic
   sudo postmap /etc/postfix/generic
   
+  # Change default of inet_interfaces = all to inet_interfaces = loopback-only
+  echo "Restricting postfix access to loopback only"
+  # could ask if people want this but then they would also need to configure smtpd side.
+  sudo sed -i 's/inet_interfaces = all/inet_interfaces = loopback-only/g' /etc/postfix/main.cf
+  
   sudo service postfix restart
-  echo "Configuration done"
+  echo "Postfix Configuration done"
   
   # we need to install stunnel4 if not already installed  
   function install_and_configure_stunnel4() {
