@@ -132,7 +132,7 @@ __EOF
   sudo service postfix restart
   echo "Configuration done"
   
-  # we need to install stunnel if not already installed  
+  # we need to install stunnel4 if not already installed  
   function install_and_configure_stunnel4() {
     if which stunnel4 >/dev/null; then
       #already installed
@@ -154,7 +154,12 @@ accept = 127.0.0.1:11125
 client = yes
 connect = $SMTP_SERVER:$SMTP_PORT
 __EOF
-    }
+    # enable stunnel4 on boot via olde /etc/default/stunnel4
+    echo "Enabling stunnel4 on boot"
+    sudo sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4
+    echo "Starting stunnel4 service to enable email testing"
+    sudo /etc/init.d/stunnel4 start
+  }
   
   read -e -p "Would you like to install and configure stunnel4; required for postfix to SSL only SMTP relayhost (y/n): " -i "y" STUNNEL4_INSTALL
   if [ "$STUNNEL4_INSTALL" = "y" ]; then
