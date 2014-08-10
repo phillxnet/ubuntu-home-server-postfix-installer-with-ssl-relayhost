@@ -1,0 +1,12 @@
+A script to ease the installation and configuration of postsfix on a home linux server (Ubuntu 14.04.1 in this case).
+The intention is to make that server able to email out via the given smtp server reports on cron jobs run etc.
+It is very likely to work on most modern debian derivatives though, although it is not tested on anything else, at lease by me
+
+It is not intended to server as a mail server for all lan machines instead is configured purely to allow that server to 
+authenticate with a relayhost / smarthost out on the internet and send all machine local email to an address given during the configuration.
+
+N.B. The authentication method is downgraded from the default TLS of postfix to allow the use of smtp servers that do not offer
+that connection method but instead use the depricated SSL port 465 method.  To facilitate this the script installs, after
+asking if it is OK to do so, stunnel4 and configures it to work as an agent for postfix.
+
+Hope it helps someone.
