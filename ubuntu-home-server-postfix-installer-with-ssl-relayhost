@@ -180,7 +180,21 @@ __EOF
     echo "N.B. this script assumes stunnel4 is installed and configured correctly"
   fi
   
-  ## send test email or not
+  # we currently deliver local mail but we may well want root's email delivered externally
+  echo
+  echo "Many system emails, such as the result of cron jobs, are by default delivered to the root user"
+  echo "It is common to want these emails forwarded to an external email address"
+  echo "The method used here is to place a new .forward file in /root directory; overwriting any existing file by the same name"
+  echo
+  read -e -p "Would you like to forward email for the root user to an external address (y/n): " -i "y" FORWARD_ROOT
+  if [ "$FORWARD_ROOT" = "y" ]; then
+    read -e -p "Email address to forward all of root's incomming email too: " -i $SMTP_USER ROOT_FORWARD_ADDRESS
+    echo "overwriting /root/.forward with the stated email address"
+    echo "$ROOT_FORWARD_ADDRESS" | sudo tee /root/.forward >/dev/null
+  fi
+  
+  # send test email or not
+  echo
   read -e -p "Would you like to send a test email using the new configuration? (y/n): " -i "y" TESTEMAIL
  
   function send_test_email() {
